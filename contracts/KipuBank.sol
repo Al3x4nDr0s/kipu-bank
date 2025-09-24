@@ -39,7 +39,7 @@ contract KipuBank {
     /// @param newBalance El nuevo saldo del usuario después del retiro.
     event Withdrawal(address indexed user, uint256 amount, uint256 newBalance);
 
-    /*///// CONSTRUCTOR Y MODIFICADORES /////*/
+    /*///// CONSTRUCTOR /////*/
 
     /// @notice Constructor del contrato KipuBank.
     /// @param _transactionWithdrawalCap El límite máximo de retiro por transacción.
@@ -48,6 +48,8 @@ contract KipuBank {
         transactionWithdrawalCap = _transactionWithdrawalCap;
         bankCap = _bankCap;
     }
+
+    /*///// MODIFICADORES /////*/
 
     /// @notice Valida que el monto total de depósitos no exceda el límite global del banco.
     modifier withinBankCap(uint256 amount) {
@@ -73,5 +75,43 @@ contract KipuBank {
         _;
     }
 
+    /*///// MAPEOS /////*/
+
+    /// @notice Mapeo que almacena los saldos de los usuarios.
+    mapping(address => uint256) private balances;
+
+    /*///// FUNCIONES /////*/
+
+    /// @notice Permite a los usuarios depositar Ether en el banco.
+    /// @dev La función es payable y utiliza los modificadores para validar que el depósito no sea cero ni que exceda el límite global del banco.
+    function deposit() external payable nonZeroAmount withinBankCap(msg.value) {
+        balances[msg.sender] += msg.value;
+        emit Deposit(msg.sender, msg.value, balances[msg.sender]);
+    }
+
+    /// @notice Permite a los usuarios retirar Ether de sus saldos.
+    /// @param amount La cantidad de Ether que el usuario desea retirar.
+    /// @dev La función utiliza los modificadores para validar que el monto de retiro no exceda el límite por transacción y que el usuario tenga suficiente saldo.
+    function withdraw(uint256 amount) external withinTransactionWithdrawalCap(amount) {
+        uint256 userBalance = balances[msg.sender];
+        if (amount > userBalance) {
+            revert("Saldo insuficiente"); // Revert con una cadena simple para este caso.
+        }
+        balances[msg.sender] -= amount;
+        payable(msg.sender).transfer(amount);
+        emit Withdrawal(msg.sender, amount, balances[msg.sender]);
+    }
+
+    /// @notice Permite a los usuarios consultar su saldo actual en el banco.
+    /// @return El saldo actual del usuario.
+    function getBalance() external view returns (uint256) {
+        return balances[msg.sender];
+    }
+
+    /// @notice Permite consultar el saldo total del banco.
+    /// @return El saldo total del contrato.
+    function getBankBalance() external view returns (uint256) {
+        return address(this).balance;
+    }
 
 }
