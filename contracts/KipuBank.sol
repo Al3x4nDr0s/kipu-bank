@@ -11,19 +11,30 @@ contract KipuBank {
 
     /*///// VARIABLES DE ESTADO /////*/
 
-    // Límite máximo de retiro por transacción (1 ETH)
-    // uint256 public constant transactionWithdrawalCap = 1 ether;
-
-    /// @notice Límite máximo de retiro por transacción.
+    /// @notice Límite máximo de retiro por transacción (1 ETH).
     /// @dev Este límite se establece en el constructor y no se puede cambiar. Gasta menos gas que una variable constante.
     uint256 public immutable transactionWithdrawalCap;
-
-    // Límite máximo de depósitos globales (100 ETH)
-    // uint256 public constant bankCap = 100 ether;
-
-    /// @notice Límite global de depósitos del banco.
+    
+    /// @notice Límite global de depósitos del banco (100 ETH).
     /// @dev Este límite se establece en el constructor y no se puede cambiar. Gasta menos gas que una variable constante.
     uint256 public immutable bankCap;
+
+    /// @notice Contador total de depósitos realizados.
+    uint256 public totalDeposits;
+
+    /// @notice Contador total de retiros realizados.
+    uint256 public totalWithdrawals;
+
+    /*///// ERRORES PERSONALIZADOS /////*/
+
+    /// @notice Se emite cuando un depósito excede el límite global del banco.
+    error DepositExceedsBankCap(uint256 depositAmount, uint256 currentBalance, uint256 bankCap);
+
+    /// @notice Se emite cuando el saldo del usuario es insuficiente para el retiro.
+    error InsufficientBalance(uint256 requestedAmount, uint256 userBalance);
+
+    /// @notice Se emite cuando un retiro excede el límite por transacción.
+    error WithdrawalExceedsCap(uint256 requestedAmount, uint256 transactionWithdrawalCap);
 
     /*///// EVENTOS /////*/
 
@@ -54,7 +65,7 @@ contract KipuBank {
     /// @notice Valida que el monto total de depósitos no exceda el límite global del banco.
     modifier withinBankCap(uint256 amount) {
         if (address(this).balance + amount > bankCap) {
-            revert("Excede el limite global del banco"); // Revert con una cadena simple para este caso.
+            revert DepositExceedsBankCap(amount, address(this).balance, bankCap);
         }
         _;
     }
@@ -62,7 +73,7 @@ contract KipuBank {
     /// @notice Valida que el monto de retiro no exceda el límite por transacción.
     modifier withinTransactionWithdrawalCap(uint256 amount) {
         if (amount > transactionWithdrawalCap) {
-            revert("Excede el limite por transaccion"); // Revert con una cadena simple para este caso.
+            revert WithdrawalExceedsCap(amount, address(this).balance);
         }
         _;
     }
@@ -77,7 +88,7 @@ contract KipuBank {
 
     /*///// MAPEOS /////*/
 
-    /// @notice Mapeo que almacena los saldos de los usuarios.
+    /// @notice Mapeo qde direcciones a los saldos de los usuarios.
     mapping(address => uint256) private balances;
 
     /*///// FUNCIONES /////*/
