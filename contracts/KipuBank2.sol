@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 /// @title KipuBank
-/// @author Web3 Expert
+/// @author Alejandro Cardenas
 /// @notice Un contrato bancario simple para depositar y retirar Ether (ETH).
 /// @dev Este contrato impone un límite de retiro por transacción y un límite global de depósitos.
 contract KipuBank {
