@@ -4,21 +4,21 @@ pragma solidity ^0.8.20;
 /// @title KipuBank
 /// @author Alejandro Cardenas
 /// @notice Un contrato bancario simple para depositar y retirar Ether (ETH).
-/// @dev Este contrato impone un límite de retiro por transacción y un límite global de depósitos.
+/// @dev Este contrato impone un límite de retiro por transacción y un límite global de depósitos a definir en el constructor.
 contract KipuBank {
     /*///////////////////////////////////////////////////////////////
-                               ESTADO
+                              VARIABLES DE ESTADO
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Límite global de depósitos del banco.
-    /// @dev Este límite se establece durante el despliegue y no se puede cambiar.
+    /// @dev Este límite se establece durante el despliegue en una variable inmutable y no se puede cambiar.
     uint256 public immutable bankCap;
 
     /// @notice Límite máximo de retiro por transacción.
-    /// @dev Este límite se establece durante el despliegue y no se puede cambiar.
+    /// @dev Este límite se establece durante el despliegue en una variable inmutable y no se puede cambiar.
     uint256 public immutable transactionWithdrawalCap;
 
-    /// @notice Mapeo de direcciones a los saldos de sus bóvedas.
+    /// @notice Mapeo de direcciones a los saldos de las cuentas.
     mapping(address => uint256) private vaults;
 
     /// @notice Contador total de depósitos realizados.
@@ -31,7 +31,7 @@ contract KipuBank {
                             ERRORES PERSONALIZADOS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Se emite cuando un depósito excede el límite global del banco.
+    /// @notice Se emite cuando un depósito excede el límite global establecido del banco.
     error DepositExceedsBankCap(uint256 depositAmount, uint256 currentBalance, uint256 bankCap);
 
     /// @notice Se emite cuando el saldo del usuario es insuficiente para el retiro.
@@ -68,16 +68,16 @@ contract KipuBank {
     /// @notice Valida que la cantidad de Ether depositada no sea cero.
     modifier nonZeroAmount() {
         if (msg.value == 0) {
-            revert("Amount must be greater than zero"); // Revert con una cadena simple para este caso.
+            revert("Amount must be greater than zero"); // Revert con una cadena para el mensale en este caso.
         }
         _;
     }
 
     /*///////////////////////////////////////////////////////////////
-                            FUNCIONES DEL BANCO
+                            FUNCIONES 
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Permite a los usuarios depositar ETH en su bóveda personal.
+    /// @notice Permite a los usuarios depositar ETH en su cuenta personal.
     /// @dev La función valida si el depósito excede el límite global del banco.
     function deposit() external payable nonZeroAmount {
         uint256 newBankBalance = address(this).balance + msg.value;
@@ -97,7 +97,7 @@ contract KipuBank {
         emit DepositMade(msg.sender, msg.value, newBalance);
     }
 
-    /// @notice Permite a los usuarios retirar ETH de su bóveda.
+    /// @notice Permite a los usuarios retirar ETH de su cuenta.
     /// @dev Sigue el patrón checks-effects-interactions para una transferencia segura.
     /// @param amount La cantidad de ETH a retirar.
     function withdraw(uint256 amount) external {
