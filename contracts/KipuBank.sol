@@ -2,138 +2,174 @@
 pragma solidity ^0.8.20;
 
 /// @title KipuBank
-/// @author Alejandro Cardenas
-/// @notice Un contrato bancario simple para depositar y retirar Ether (ETH).
-/// @dev Este contrato impone un límite de retiro por transacción y un límite global de depósitos a definir en el constructor.
+/// @author Web3 Expert Developer
+/// @notice A simple bank contract for depositing and withdrawing native tokens (ETH).
+/// @dev This contract enforces a per-transaction withdrawal limit and a global deposit cap.
 contract KipuBank {
     /*///////////////////////////////////////////////////////////////
-                              VARIABLES DE ESTADO
+                              STATE VARIABLES
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Límite global de depósitos del banco.
-    /// @dev Este límite se establece durante el despliegue en una variable inmutable y no se puede cambiar.
-    uint256 public immutable bankCap;
+    /// @notice The global deposit limit for the bank.
+    /// @dev This limit is set at deployment in an immutable variable and cannot be changed.
+    uint256 public immutable bankCap; // UpperCamelCase for contract/struct/enum names, lowerCamelCase for variables.
 
-    /// @notice Límite máximo de retiro por transacción.
-    /// @dev Este límite se establece durante el despliegue en una variable inmutable y no se puede cambiar.
+    /// @notice The maximum amount allowed to be withdrawn per transaction.
+    /// @dev This limit is set at deployment in an immutable variable and cannot be changed.
     uint256 public immutable transactionWithdrawalCap;
 
-    /// @notice Mapeo de direcciones a los saldos de las cuentas.
-    mapping(address => uint256) private vaults;
+    /// @notice Mapping of addresses to account balances (in Wei).
+    mapping(address => uint256) private userVaults; 
 
-    /// @notice Contador total de depósitos realizados.
+    /// @notice Total count of successful deposits made.
     uint256 public totalDeposits;
 
-    /// @notice Contador total de retiros realizados.
+    /// @notice Total count of successful withdrawals made.
     uint256 public totalWithdrawals;
 
     /*///////////////////////////////////////////////////////////////
-                            ERRORES PERSONALIZADOS
+                           CUSTOM ERRORS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Se emite cuando un depósito excede el límite global establecido del banco.
-    error DepositExceedsBankCap(uint256 depositAmount, uint256 currentBalance, uint256 bankCap);
+    /// @notice Emitted when a deposit exceeds the established global bank cap.
+    /// @param depositAmount The amount the user attempted to deposit.
+    /// @param currentContractBalance The balance of the contract before the deposit.
+    /// @param bankCap The global maximum deposit cap.
+    error DepositExceedsBankCap(uint256 depositAmount, uint256 currentContractBalance, uint256 bankCap);
 
-    /// @notice Se emite cuando el saldo del usuario es insuficiente para el retiro.
+    /// @notice Emitted when the user's balance is insufficient for the requested withdrawal.
+    /// @param requestedAmount The amount the user tried to withdraw.
+    /// @param userBalance The user's current available balance.
     error InsufficientBalance(uint256 requestedAmount, uint256 userBalance);
 
-    /// @notice Se emite cuando un retiro excede el límite por transacción.
+    /// @notice Emitted when a withdrawal exceeds the per-transaction limit.
+    /// @param requestedAmount The amount the user tried to withdraw.
+    /// @param transactionWithdrawalCap The maximum allowed amount per transaction.
     error WithdrawalExceedsCap(uint256 requestedAmount, uint256 transactionWithdrawalCap);
+    
+    /// @notice Emitted when the transfer of Ether fails during a withdrawal.
+    error TransferFailed();
+
+    /// @notice Emitted when a zero amount is deposited, violating the requirement.
+    error ZeroAmount();
 
     /*///////////////////////////////////////////////////////////////
-                               EVENTOS
+                               EVENTS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Se emite cuando un usuario deposita fondos exitosamente.
-    /// @param depositor La dirección que realizó el depósito.
-    /// @param amount La cantidad de ETH depositada.
-    /// @param newBalance El nuevo saldo del usuario.
+    /// @notice Emitted when a user successfully deposits funds.
+    /// @param depositor The address that made the deposit.
+    /// @param amount The amount of ETH deposited.
+    /// @param newBalance The user's new balance.
     event DepositMade(address indexed depositor, uint256 amount, uint256 newBalance);
 
-    /// @notice Se emite cuando un usuario retira fondos exitosamente.
-    /// @param withdrawer La dirección que realizó el retiro.
-    /// @param amount La cantidad de ETH retirada.
-    /// @param newBalance El nuevo saldo del usuario.
+    /// @notice Emitted when a user successfully withdraws funds.
+    /// @param withdrawer The address that performed the withdrawal.
+    /// @param amount The amount of ETH withdrawn.
+    /// @param newBalance The user's new balance.
     event WithdrawalMade(address indexed withdrawer, uint256 amount, uint256 newBalance);
 
     /*///////////////////////////////////////////////////////////////
-                            CONSTRUCTOR Y MODIFICADORES
+                            CONSTRUCTOR AND MODIFIERS
     //////////////////////////////////////////////////////////////*/
 
+    /// @dev Initializes the contract with the required deposit and withdrawal caps.
+    /// @param _bankCap The global deposit limit.
+    /// @param _transactionWithdrawalCap The maximum withdrawal amount per transaction.
     constructor(uint256 _bankCap, uint256 _transactionWithdrawalCap) {
         bankCap = _bankCap;
         transactionWithdrawalCap = _transactionWithdrawalCap;
     }
 
-    /// @notice Valida que la cantidad de Ether depositada no sea cero.
+    /// @notice Validates that the amount of Ether deposited is not zero.
     modifier nonZeroAmount() {
         if (msg.value == 0) {
-            revert("Amount must be greater than zero"); // Revert con una cadena para el mensale en este caso.
+            revert ZeroAmount(); 
         }
         _;
     }
 
     /*///////////////////////////////////////////////////////////////
-                            FUNCIONES 
+                            FUNCTIONS 
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Permite a los usuarios depositar ETH en su cuenta personal.
-    /// @dev La función valida si el depósito excede el límite global del banco.
+    /// @notice Allows users to deposit ETH into their personal vault.
+    /// @dev The function checks if the deposit exceeds the global bank limit before processing.
     function deposit() external payable nonZeroAmount {
-        uint256 newBankBalance = address(this).balance + msg.value;
-        if (newBankBalance > bankCap) {
-            revert DepositExceedsBankCap(msg.value, address(this).balance, bankCap);
+                
+        // CHECK: Cap check (requires reading the current contract balance once).
+        uint256 currentContractBalance = address(this).balance; // Current balance is read once.
+        uint256 futureContractBalance = currentContractBalance + msg.value; // Calculate potential new balance.
+
+        if (futureContractBalance > bankCap) {
+            revert DepositExceedsBankCap(msg.value, currentContractBalance, bankCap);
         }
 
-        // Checks
-        uint256 oldBalance = vaults[msg.sender];
-        uint256 newBalance = oldBalance + msg.value;
+        // CHECK: Get user's old balance (Single read).
+        uint256 oldBalance = userVaults[msg.sender];
 
-        // Effects
-        vaults[msg.sender] = newBalance;
-        totalDeposits++;
+        // EFFECTS: Update user balance and total deposits counter.
+        // The addition is safe as it's checked against bankCap, but for general counter safety, we can use unchecked.
+        userVaults[msg.sender] = oldBalance + msg.value;
+        
+        // Use unchecked for known-safe increments.
+        unchecked {
+            totalDeposits++; 
+        }
 
-        // Interactions (n/a en este caso)
-        emit DepositMade(msg.sender, msg.value, newBalance);
+        // Emit Event
+        emit DepositMade(msg.sender, msg.value, userVaults[msg.sender]);
     }
 
-    /// @notice Permite a los usuarios retirar ETH de su cuenta.
-    /// @dev Sigue el patrón checks-effects-interactions para una transferencia segura.
-    /// @param amount La cantidad de ETH a retirar.
+    /// @notice Allows users to withdraw ETH from their account.
+    /// @dev Strictly follows the Checks-Effects-Interactions pattern for secure transfer.
+    /// @param amount The amount of ETH to withdraw (in Wei).
     function withdraw(uint256 amount) external {
-        // Checks
+        // CHECKS
+        // Withdrawal cap check
+        if (amount == 0) revert ZeroAmount();
         if (amount > transactionWithdrawalCap) {
             revert WithdrawalExceedsCap(amount, transactionWithdrawalCap);
         }
-        if (amount > vaults[msg.sender]) {
-            revert InsufficientBalance(amount, vaults[msg.sender]);
-        }
-
-        // Effects
-        vaults[msg.sender] -= amount;
-        totalWithdrawals++;
         
-        // Interactions
-        (bool success, ) = msg.sender.call{value: amount}("");
-        if (!success) {
-            revert("Transfer failed"); // Una falla en la interacción debe revertir la transacción.
+        // Insufficient balance check (Single read of state variable)
+        uint256 userBalance = userVaults[msg.sender];
+        if (amount > userBalance) {
+            revert InsufficientBalance(amount, userBalance);
         }
 
-        emit WithdrawalMade(msg.sender, amount, vaults[msg.sender]);
+        // EFFECTS (Update state BEFORE interaction)
+        // Subtraction is safe due to the check above.
+        userVaults[msg.sender] = userBalance - amount; 
+        
+        // Use unchecked for known-safe increments.
+        unchecked {
+            totalWithdrawals++;
+        }
+        
+        // INTERACTIONS (Secure transfer using call)
+        (bool success, ) = payable(msg.sender).call{value: amount}(""); // Use payable(msg.sender).call
+        if (!success) {
+            // Revert state change if interaction fails.
+            revert TransferFailed(); 
+        }
+
+        // Emit Event
+        emit WithdrawalMade(msg.sender, amount, userVaults[msg.sender]);
     }
 
-    /// @notice Obtiene el saldo del vault de un usuario.
-    /// @param user La dirección del usuario.
-    /// @return El saldo actual del usuario.
-    function getBalance(address user) external view returns (uint256) {
-        return vaults[user];
+    /// @notice Gets the vault balance of a specific user.
+    /// @param _user The address of the user.
+    /// @return The user's current balance (in Wei).
+    function getBalance(address _user) external view returns (uint256) {
+        return userVaults[_user];
     }
     
-    /// @notice Obtiene el saldo total de un usuario.
-    /// @dev Esta es una función `private` para uso interno del contrato.
-    /// @param user La dirección del usuario.
-    /// @return El saldo actual del usuario.
-    function _getVaultBalance(address user) private view returns (uint256) {
-        return vaults[user];
+    /// @notice Gets the private vault balance of a user.
+    /// @dev This is a private function for internal contract use.
+    /// @param _user The address of the user.
+    /// @return The user's current balance (in Wei).
+    function _getVaultBalance(address _user) private view returns (uint256) {
+        return userVaults[_user];
     }
 }
