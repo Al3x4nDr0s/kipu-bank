@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 /// @title KipuBank
-/// @author Web3 Expert Developer
+/// @author Alejandro Cardenas
 /// @notice A simple bank contract for depositing and withdrawing native tokens (ETH).
 /// @dev This contract enforces a per-transaction withdrawal limit and a global deposit cap.
 contract KipuBank {
